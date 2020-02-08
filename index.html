@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minesweeper</title>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+output {
+  display: block;
+  margin-bottom: 1em;
+  margin-left: 1em;
+}
+pre {
+  font-family: "Courier New", monospace;
+  font-size: 20px;
+  line-height: 20px;
+  text-transform: full-width;
+}
+table {
+  border-collapse: collapse;
+  font-size: 16px;
+  line-height: 16px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+td {
+  background-color: white;
+  border: 1px solid black;
+  color: black;
+  height: 18px;
+  width: 18px;
+}
+.covered {
+  background-color: #999999;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Minesweeper</h1>
+
+<output id="board"></output>
+<button id="new">New board</button>
+
+<p>Find all the mines without clicking on them.</p>
+</main>
+
+<script>
+/*
+ * Size in pixels of each cell.
+ */
+const SCALE = 20;
+
+/*
+ * Implementation note:
+ *
+ * Board takes advantage of the fact that each cell has at most 8 neighbors.
+ * This means each cell can be touching at most 8 mines.
+ * So an Array of integers can represent the board.
+ * Each integer indicates the number of neighboring mines with 9 indicating the mine.
+ * To indicate a cell is covered, 10 is added to the integer.
+ */
+class Board {
+  constructor(width, height) {
+    this.width = Math.max(1, width);
+    this.height = Math.max(1, height);
+    this.cells = new Array(this.width * this.height).fill(-1);
+    this.won = false;
+    this.lost = false;
+  }
+  coordinatesToIndex(x, y) {
+    return x + (y * this.width);
+  }
+  countMines(x, y) {
+    let count = 0;
+    for (let i = Math.max(0, x - 1); i <= Math.min(x + 1, this.width - 1); i++) {
+      for (let j = Math.max(0, y - 1); j <= Math.min(y + 1, this.height - 1); j++) {
+        if ((i == x) && (j == y)) {
+          // Do not check self
+          continue;
+        }
+        if ((this.cells[this.coordinatesToIndex(i, j)] % 10) == 9) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+  get(x, y) {
+    if (x < 0) {
+      return -1;
+    }
+    if (y < 0) {
+      return -1;
+    }
+    if (x >= this.width) {
+      return -1;
+    }
+    if (y >= this.height) {
+      return -1;
+    }
+    let count = this.cells[this.coordinatesToIndex(x, y)];
+    if (count < 10) {
+      return count;
+    }
+    return -1;
+  }
+  populateCounts() {
+    for (let x = 0; x < this.width; x++) {
+      for (let y = 0; y < this.height; y++) {
+        let index = this.coordinatesToIndex(x, y);
+        if (this.cells[index] < 0) {
+          this.cells[index] = this.countMines(x, y) + 10;
+        }
+      }
+    }
+  }
+  reveal(x, y) {
+    if (this.won) {
+      return this;
+    }
+    if (this.lost) {
+      return this;
+    }
+    if (x < 0) {
+      return this;
+    }
+    if (y < 0) {
+      return this;
+    }
+    if (x >= this.width) {
+      return this;
+    }
+    if (y >= this.height) {
+      return this;
+    }
+
+    let board = new Board(this.width, this.height),
+        index = this.coordinatesToIndex(x, y);
+    board.cells = this.cells.slice();
+    board.cells[index] = this.cells[index] % 10;
+    if (board.cells[index] == 9) {
+      // (x, y) is a mine
+      board.lost = true;
+      return board;
+    }
+    if (board.cells[index] == 0) {
+      // recursively reveal the board
+      let work = [{x: x, y: y}];
+      for (let done = 0; done < work.length; done++) {
+        let currentX = work[done].x, currentY = work[done].y;
+        for (let i = Math.max(0, currentX - 1); i <= Math.min(currentX + 1, board.width - 1); i++) {
+          for (let j = Math.max(0, currentY - 1); j <= Math.min(currentY + 1, board.height - 1); j++) {
+            if ((i == currentX) && (j == currentY)) {
+              // Do not check self
+              continue;
+            }
+            index = this.coordinatesToIndex(i, j);
+            board.cells[index] = this.cells[index] % 10;
+            if ((board.cells[index] <= 0) &&
+                (!work.some(p => ((p.x == i) && (p.y == j))))) {
+              work.push({x: i, y: j});
+            }
+          }
+        }
+      }
+    }
+
+    if (board.cells.every(v => ((v < 10) || (v == 19)))) {
+      // If every cell has been revealed except for the mines
+      board.won = true;
+    }
+
+    return board;
+  }
+
+  /*
+   * Return a width x height Board with limit mines.
+   */
+  static random(width, height, limit) {
+    let count = 0, board = new Board(width, height), length = width * height;
+    while (count < limit) {
+      let index = Math.floor(Math.random() * length);
+      if (board.cells[index] == -1) {
+        board.cells[index] = 19;
+        count++;
+      }
+    }
+    board.populateCounts();
+    return board;
+  }
+
+  /*
+   * A short test suite to confirm the Board class works.
+   */
+  static test() {
+    let board = new Board(10, 10);
+    console.assert(board.cells.every(v => (v == -1)),
+                   {msg: 'board.cells not initialized.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    board.cells[11] = 19;
+    board.cells[99] = 19;
+    console.assert(board.coordinatesToIndex(1, 1) == 11,
+                   {msg: 'board.coordinatesToIndex() failed.'});
+    console.assert(board.coordinatesToIndex(9, 9) == 99,
+                   {msg: 'board.coordinatesToIndex() failed.'});
+
+    board.populateCounts();
+    console.assert(board.cells.every(v => (v >= 10)),
+                   {msg: 'board.cells not covered.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    for (let x = 0; x < board.width; x++) {
+      for (let y = 0; y < board.height; y++) {
+        console.assert(board.get(x, y) == -1,
+                       {msg: 'board is not covered.'});
+      }
+    }
+    for (let [x, y, value] of [
+      [0, 0, 11],
+      [0, 1, 11],
+      [0, 2, 11],
+      [1, 0, 11],
+      [1, 1, 19],
+      [1, 2, 11],
+      [2, 0, 11],
+      [2, 1, 11],
+      [2, 2, 11],
+      [8, 7, 10],
+      [8, 8, 11],
+      [8, 9, 11],
+      [9, 7, 10],
+      [9, 8, 11],
+      [9, 9, 19]]) {
+      let index = board.coordinatesToIndex(x, y);
+      console.assert(board.get(x, y) == -1,
+                     {msg: 'board is not covered.'});
+      console.assert(board.cells[index] == value,
+                     {x: x, y: y, msg: 'board count is incorrect.'});
+    }
+    board = board.reveal(5, 5);
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    let offset = 0
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 2; x < 9; x++) {
+        console.assert(board.coordinatesToIndex(x, y) == (x + offset),
+                       {x: x, y: y, msg: 'board.coordinatesToIndex() failed.'});
+        let value = board.get(x, y);
+        console.assert((0 <= value) && (value < 9),
+                       {msg: 'board is covered.'});
+      }
+      offset += board.width;
+    }
+    for (let y = 0; y < 9; y++) {
+      let value = board.get(9, y);
+      console.assert((0 <= value) && (value < 9),
+                     {msg: 'board is covered.'});
+    }
+
+    let lostBoard = board.reveal(9, 9);
+    console.assert(!lostBoard.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(lostBoard.lost,
+                   {msg: 'board unexpectedly not lost.'});
+    console.assert(lostBoard.reveal(4, 4) == lostBoard,
+                   {msg: 'different board returned.'});
+
+    board = board.reveal(0, 0);
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    board = board.reveal(0, 1);
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    board = board.reveal(1, 0);
+    console.assert(board.won,
+                   {msg: 'board unexpectedly not won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    console.assert(board.reveal(4, 4) == board,
+                   {msg: 'different board returned.'});
+
+    board = Board.random(10, 10);
+    console.assert(board.cells.every(v => (v >= 10)),
+                   {msg: 'board.cells not covered.'});
+    console.assert(!board.won,
+                   {msg: 'board unexpectedly won.'});
+    console.assert(!board.lost,
+                   {msg: 'board unexpectedly lost.'});
+    for (let x = 0; x < board.width; x++) {
+      for (let y = 0; y < board.height; y++) {
+        console.assert(board.get(x, y) == -1,
+                       {msg: 'board is not covered.'});
+      }
+    }
+  }
+}
+Board.test();
+
+class Display {
+  constructor(parent) {
+    if (!(parent instanceof Node)) {
+      throw new TypeError('Bad DOM parent.');
+    }
+    this.parent = parent;
+  }
+  draw(board) {
+    console.assert(false, {msg: 'Not implemented'});
+  }
+}
+
+class ASCIIDisplay extends Display {
+  constructor(parent, cover = '?', mine = '*') {
+    super(parent);
+    this.cover = cover;
+    this.mine = mine;
+  }
+  draw(board) {
+    let target = this.parent.querySelector('pre');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('pre');
+      this.parent.appendChild(target);
+    }
+
+    let rows = [];
+    for (let y = 0; y < board.height; y++) {
+      let row = [];
+      for (let x = 0; x < board.width; x++) {
+        let count = board.get(x, y);
+        if (count < 0) {
+          row.push(this.cover);
+        }
+        else if (count == 0) {
+          row.push(' ');
+        }
+        else {
+          row.push(count);
+        }
+      }
+      rows.push(row.join(''));
+    }
+    target.textContent = rows.join('\n');
+  }
+}
+
+class CanvasDisplay extends Display {
+  constructor(parent, coverColor = '#999999', textColor = '#000000', backgroundColor = '#FFFFFF') {
+    super(parent);
+    this.coverColor = coverColor;
+    this.textColor = textColor;
+    this.backgroundColor = backgroundColor;
+  }
+  draw(board) {
+    let target = this.parent.querySelector('canvas');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('canvas');
+      this.parent.appendChild(target);
+    }
+    let width = board.width * SCALE,
+        height = board.height * SCALE,
+        middle = SCALE / 2;
+    if ((target.width != width) || (target.height != height)) {
+      target.width = width;
+      target.height = height;
+    }
+
+    let context = target.getContext('2d');
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.strokeStyle = this.textColor;
+
+    context.fillStyle = this.backgroundColor;
+    context.fillRect(0, 0, width, height);
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        let count = board.get(x, y);
+        if (count < 0) {
+          context.fillStyle = this.coverColor;
+          context.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+        }
+        else if (count > 0) {
+          context.fillStyle = this.textColor;
+          context.fillText(count, (x * SCALE) + middle, (y * SCALE) + middle);
+        }
+      }
+    }
+
+    // Draw grid lines
+    context.beginPath();
+    context.moveTo(1, 1);
+    context.lineTo(width - 1, 1);
+    context.lineTo(width - 1, height - 1);
+    context.lineTo(1, height - 1);
+    context.closePath();
+    context.stroke();
+    for (let x = 1; x < board.width; x++) {
+      context.beginPath();
+      context.moveTo(x * SCALE, 0);
+      context.lineTo(x * SCALE, height);
+      context.stroke();
+    }
+    for (let y = 1; y < board.height; y++) {
+      context.beginPath();
+      context.moveTo(0, y * SCALE);
+      context.lineTo(width, y * SCALE);
+      context.stroke();
+    }
+  }
+}
+
+class TableDisplay extends Display {
+  constructor(parent) {
+    super(parent);
+  }
+  draw(board) {
+    let target = this.parent.querySelector('table');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('table');
+      this.parent.appendChild(target);
+    }
+
+    let rows = [];
+    for (let y = 0; y < board.height; y++) {
+      let row = [];
+      row.push('  <tr>');
+      for (let x = 0; x < board.width; x++) {
+        let cell = '    ',
+            count = board.get(x, y);
+        if (count < 0) {
+          cell += '<td class="covered">';
+        }
+        else {
+          cell += '<td>';
+        }
+        if (count > 0) {
+          cell += count;
+        }
+        cell += '</td>';
+        row.push(cell);
+      }
+      row.push('  </tr>');
+      rows.push(row.join('\n'));
+    }
+    target.innerHTML = rows.join('\n');
+  }
+}
+
+let output = document.querySelector('#board');
+//let display = new ASCIIDisplay(output);
+let display = new CanvasDisplay(output);
+//let display = new TableDisplay(output);
+
+let board = null;
+function newBoard(event) {
+  board = Board.random(10, 10, 10);
+  display.draw(board);
+}
+
+output.addEventListener('click', (event) => {
+  let box = output.getBoundingClientRect(),
+      x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.width - 1),
+      y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.height - 1);
+  if (x < 0) {
+    x = 0;
+  }
+  if (y < 0) {
+    y = 0;
+  }
+  previous = board;
+  board = previous.reveal(x, y);
+  display.draw(board);
+  if ((!previous.won) && board.won) {
+    alert('You won!');
+  }
+  if ((!previous.lost) && board.lost) {
+    alert('You lost!');
+  }
+});
+document.querySelector('#new').addEventListener('click', newBoard);
+
+newBoard();
+</script>
+</body>
+
+</html>
