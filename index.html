@@ -55,7 +55,7 @@ td {
 
 <script>
 /*
- * Size in pixels of each cell.
+ * Integer size in pixels of each cell.
  */
 const SCALE = 20;
 
@@ -64,66 +64,110 @@ const SCALE = 20;
  *
  * Board takes advantage of the fact that each cell has at most 8 neighbors.
  * This means each cell can be touching at most 8 mines.
- * So an Array of integers can represent the board.
+ * So an array of integers can represent the board.
  * Each integer indicates the number of neighboring mines with 9 indicating the mine.
  * To indicate a cell is covered, 10 is added to the integer.
  */
 class Board {
+  static UNKNOWN = -1;
+  static MINE = 9;
+
   constructor(width, height) {
+    if (typeof width !== 'number') {
+      throw new TypeError('width must be a number.');
+    }
+    if (typeof height !== 'number') {
+      throw new TypeError('height must be a number.');
+    }
+
     this.width = Math.max(1, width);
     this.height = Math.max(1, height);
-    this.cells = new Array(this.width * this.height).fill(-1);
+    this.cells = new Array(this.width * this.height).fill(Board.UNKNOWN);
     this.won = false;
     this.lost = false;
   }
-  coordinatesToIndex(x, y) {
+
+  /*
+   * Return the index for coordinates (x, y).
+   */
+  _coordinatesToIndex(x, y) {
     return x + (y * this.width);
   }
-  countMines(x, y) {
+
+  /*
+   * Return the integer count of mines neighboring the cell at coordinates (x, y).
+   */
+  _countMines(x, y) {
     let count = 0;
     for (let i = Math.max(0, x - 1); i <= Math.min(x + 1, this.width - 1); i++) {
       for (let j = Math.max(0, y - 1); j <= Math.min(y + 1, this.height - 1); j++) {
-        if ((i == x) && (j == y)) {
+        if ((i === x) && (j === y)) {
           // Do not check self
           continue;
         }
-        if ((this.cells[this.coordinatesToIndex(i, j)] % 10) == 9) {
+        if ((this.cells[this._coordinatesToIndex(i, j)] % 10) === Board.MINE) {
           count++;
         }
       }
     }
     return count;
   }
-  get(x, y) {
-    if (x < 0) {
-      return -1;
-    }
-    if (y < 0) {
-      return -1;
-    }
-    if (x >= this.width) {
-      return -1;
-    }
-    if (y >= this.height) {
-      return -1;
-    }
-    let count = this.cells[this.coordinatesToIndex(x, y)];
-    if (count < 10) {
-      return count;
-    }
-    return -1;
-  }
-  populateCounts() {
+
+  /*
+   * Populate this Board instance with mine counts after placing the mines.
+   */
+  _populateCounts() {
     for (let x = 0; x < this.width; x++) {
       for (let y = 0; y < this.height; y++) {
-        let index = this.coordinatesToIndex(x, y);
-        if (this.cells[index] < 0) {
-          this.cells[index] = this.countMines(x, y) + 10;
+        let index = this._coordinatesToIndex(x, y);
+        if (this.cells[index] === Board.UNKNOWN) {
+          this.cells[index] = this._countMines(x, y) + 10;
         }
       }
     }
   }
+
+  /*
+   * Return the integer count of mines neighboring the cell at coordinates (x, y) if the cell is uncovered or Board.UNKNOWN.
+   */
+  getMineCount(x, y) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+
+    if (x < 0) {
+      return Board.UNKNOWN;
+    }
+    if (y < 0) {
+      return Board.UNKNOWN;
+    }
+    if (this.width <= x) {
+      return Board.UNKNOWN;
+    }
+    if (this.height <= y) {
+      return Board.UNKNOWN;
+    }
+    let count = this.cells[this._coordinatesToIndex(x, y)];
+    if (count <= Board.MINE) {
+      return count;
+    }
+    return Board.UNKNOWN;
+  }
+
+  /*
+   * Return a new Board instance resulting from uncovering the cell at coordinates (x, y).
+   */
   reveal(x, y) {
+    if (typeof x !== 'number') {
+      throw new TypeError('x must be a number.');
+    }
+    if (typeof y !== 'number') {
+      throw new TypeError('y must be a number.');
+    }
+
     if (this.won) {
       return this;
     }
@@ -136,37 +180,40 @@ class Board {
     if (y < 0) {
       return this;
     }
-    if (x >= this.width) {
+    if (this.width <= x) {
       return this;
     }
-    if (y >= this.height) {
+    if (this.height <= y) {
       return this;
     }
 
     let board = new Board(this.width, this.height),
-        index = this.coordinatesToIndex(x, y);
+        index = this._coordinatesToIndex(x, y),
+        work = [{x: x, y: y}],
+        currentX,
+        currentY;
     board.cells = this.cells.slice();
     board.cells[index] = this.cells[index] % 10;
-    if (board.cells[index] == 9) {
+    if (board.cells[index] === Board.MINE) {
       // (x, y) is a mine
       board.lost = true;
       return board;
     }
-    if (board.cells[index] == 0) {
+    if (board.cells[index] === 0) {
       // recursively reveal the board
-      let work = [{x: x, y: y}];
       for (let done = 0; done < work.length; done++) {
-        let currentX = work[done].x, currentY = work[done].y;
+        currentX = work[done].x;
+        currentY = work[done].y;
         for (let i = Math.max(0, currentX - 1); i <= Math.min(currentX + 1, board.width - 1); i++) {
           for (let j = Math.max(0, currentY - 1); j <= Math.min(currentY + 1, board.height - 1); j++) {
-            if ((i == currentX) && (j == currentY)) {
+            if ((i === currentX) && (j === currentY)) {
               // Do not check self
               continue;
             }
-            index = this.coordinatesToIndex(i, j);
+            index = this._coordinatesToIndex(i, j);
             board.cells[index] = this.cells[index] % 10;
-            if ((board.cells[index] <= 0) &&
-                (!work.some(p => ((p.x == i) && (p.y == j))))) {
+            if ((board.cells[index] === 0) &&
+                (!work.some(p => ((p.x === i) && (p.y === j))))) {
               work.push({x: i, y: j});
             }
           }
@@ -174,7 +221,7 @@ class Board {
       }
     }
 
-    if (board.cells.every(v => ((v < 10) || (v == 19)))) {
+    if (board.cells.every(v => ((v < Board.MINE) || (v === (Board.MINE + 10))))) {
       // If every cell has been revealed except for the mines
       board.won = true;
     }
@@ -183,18 +230,23 @@ class Board {
   }
 
   /*
-   * Return a width x height Board with limit mines.
+   * Return a new width x height Board instance with limit mines.
    */
   static random(width, height, limit) {
-    let count = 0, board = new Board(width, height), length = width * height;
+    let board = new Board(width, height),
+        length = width * height,
+        count = 0,
+        index;
+    // Place limit mines
     while (count < limit) {
-      let index = Math.floor(Math.random() * length);
-      if (board.cells[index] == -1) {
-        board.cells[index] = 19;
+      index = Math.floor(Math.random() * length);
+      if (board.cells[index] === Board.UNKNOWN) {
+        board.cells[index] = Board.MINE + 10;
         count++;
       }
     }
-    board.populateCounts();
+    // Populate the remaining cells with mine counts
+    board._populateCounts();
     return board;
   }
 
@@ -203,30 +255,30 @@ class Board {
    */
   static test() {
     let board = new Board(10, 10);
-    console.assert(board.cells.every(v => (v == -1)),
-                   {msg: 'board.cells not initialized.'});
+    console.assert(board.cells.every(v => (v === Board.UNKNOWN)),
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
-    board.cells[11] = 19;
-    board.cells[99] = 19;
-    console.assert(board.coordinatesToIndex(1, 1) == 11,
-                   {msg: 'board.coordinatesToIndex() failed.'});
-    console.assert(board.coordinatesToIndex(9, 9) == 99,
-                   {msg: 'board.coordinatesToIndex() failed.'});
+                   {msg: 'board.lost is incorrect.'});
+    board.cells[11] = Board.MINE + 10;
+    board.cells[99] = Board.MINE + 10;
+    console.assert(board._coordinatesToIndex(1, 1) === 11,
+                   {msg: 'board._coordinatesToIndex() failed.'});
+    console.assert(board._coordinatesToIndex(9, 9) === 99,
+                   {msg: 'board._coordinatesToIndex() failed.'});
 
-    board.populateCounts();
+    board._populateCounts();
     console.assert(board.cells.every(v => (v >= 10)),
-                   {msg: 'board.cells not covered.'});
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
-    for (let x = 0; x < board.width; x++) {
-      for (let y = 0; y < board.height; y++) {
-        console.assert(board.get(x, y) == -1,
-                       {msg: 'board is not covered.'});
+                   {msg: 'board.lost is incorrect.'});
+    for (let x = -1; x <= board.width; x++) {
+      for (let y = -1; y <= board.height; y++) {
+        console.assert(board.getMineCount(x, y) === Board.UNKNOWN,
+                       {msg: 'board.getMineCount() failed.'});
       }
     }
     for (let [x, y, value] of [
@@ -234,7 +286,7 @@ class Board {
       [0, 1, 11],
       [0, 2, 11],
       [1, 0, 11],
-      [1, 1, 19],
+      [1, 1, Board.MINE + 10],
       [1, 2, 11],
       [2, 0, 11],
       [2, 1, 11],
@@ -244,72 +296,74 @@ class Board {
       [8, 9, 11],
       [9, 7, 10],
       [9, 8, 11],
-      [9, 9, 19]]) {
-      let index = board.coordinatesToIndex(x, y);
-      console.assert(board.get(x, y) == -1,
-                     {msg: 'board is not covered.'});
-      console.assert(board.cells[index] == value,
-                     {x: x, y: y, msg: 'board count is incorrect.'});
+      [9, 9, Board.MINE + 10]]) {
+      let index = board._coordinatesToIndex(x, y);
+      console.assert(board.getMineCount(x, y) === Board.UNKNOWN,
+                     {msg: 'board.getMineCount() failed.'});
+      console.assert(board.cells[index] === value,
+                     {msg: 'board.cells is incorrect.'});
     }
     board = board.reveal(5, 5);
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
-    let offset = 0
+                   {msg: 'board.lost is incorrect.'});
+    let offset = 0;
     for (let y = 0; y < board.height; y++) {
       for (let x = 2; x < 9; x++) {
-        console.assert(board.coordinatesToIndex(x, y) == (x + offset),
-                       {x: x, y: y, msg: 'board.coordinatesToIndex() failed.'});
-        let value = board.get(x, y);
-        console.assert((0 <= value) && (value < 9),
-                       {msg: 'board is covered.'});
+        console.assert(board._coordinatesToIndex(x, y) === (x + offset),
+                       {msg: 'board._coordinatesToIndex() failed.'});
+        let value = board.getMineCount(x, y);
+        console.assert((0 <= value) && (value < Board.MINE),
+                       {msg: 'board.getMineCount() failed.'});
       }
       offset += board.width;
     }
     for (let y = 0; y < 9; y++) {
-      let value = board.get(9, y);
-      console.assert((0 <= value) && (value < 9),
-                     {msg: 'board is covered.'});
+      console.assert(board._coordinatesToIndex(9, y) === (9 + (board.width * y)),
+                     {msg: 'board._coordinatesToIndex() failed.'});
+      let value = board.getMineCount(9, y);
+      console.assert((0 <= value) && (value < Board.MINE),
+                     {msg: 'board.getMineCount() failed.'});
     }
 
     let lostBoard = board.reveal(9, 9);
     console.assert(!lostBoard.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(lostBoard.lost,
-                   {msg: 'board unexpectedly not lost.'});
-    console.assert(lostBoard.reveal(4, 4) == lostBoard,
-                   {msg: 'different board returned.'});
+                   {msg: 'board.lost is incorrect.'});
+    console.assert(lostBoard.reveal(4, 4) === lostBoard,
+                   {msg: 'board.reveal() failed.'});
 
     board = board.reveal(0, 0);
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
+                   {msg: 'board.lost is incorrect.'});
     board = board.reveal(0, 1);
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
+                   {msg: 'board.lost is incorrect.'});
     board = board.reveal(1, 0);
     console.assert(board.won,
-                   {msg: 'board unexpectedly not won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
-    console.assert(board.reveal(4, 4) == board,
-                   {msg: 'different board returned.'});
+                   {msg: 'board.lost is incorrect.'});
+    console.assert(board.reveal(4, 4) === board,
+                   {msg: 'board.reveal() failed.'});
 
     board = Board.random(10, 10);
     console.assert(board.cells.every(v => (v >= 10)),
-                   {msg: 'board.cells not covered.'});
+                   {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
-                   {msg: 'board unexpectedly won.'});
+                   {msg: 'board.won is incorrect.'});
     console.assert(!board.lost,
-                   {msg: 'board unexpectedly lost.'});
-    for (let x = 0; x < board.width; x++) {
-      for (let y = 0; y < board.height; y++) {
-        console.assert(board.get(x, y) == -1,
-                       {msg: 'board is not covered.'});
+                   {msg: 'board.lost is incorrect.'});
+    for (let x = -1; x <= board.width; x++) {
+      for (let y = -1; y <= board.height; y++) {
+        console.assert(board.getMineCount(x, y) === Board.UNKNOWN,
+                       {msg: 'board.getMineCount() failed.'});
       }
     }
   }
@@ -323,6 +377,7 @@ class Display {
     }
     this.parent = parent;
   }
+
   draw(board) {
     console.assert(false, {msg: 'Not implemented'});
   }
@@ -334,6 +389,7 @@ class ASCIIDisplay extends Display {
     this.cover = cover;
     this.mine = mine;
   }
+
   draw(board) {
     let target = this.parent.querySelector('pre');
     if (target == null) {
@@ -346,11 +402,11 @@ class ASCIIDisplay extends Display {
     for (let y = 0; y < board.height; y++) {
       let row = [];
       for (let x = 0; x < board.width; x++) {
-        let count = board.get(x, y);
+        let count = board.getMineCount(x, y);
         if (count < 0) {
           row.push(this.cover);
         }
-        else if (count == 0) {
+        else if (count === 0) {
           row.push(' ');
         }
         else {
@@ -364,12 +420,13 @@ class ASCIIDisplay extends Display {
 }
 
 class CanvasDisplay extends Display {
-  constructor(parent, coverColor = '#999999', textColor = '#000000', backgroundColor = '#FFFFFF') {
+  constructor(parent, coverColor = '#999999', textColor = 'black', backgroundColor = 'white') {
     super(parent);
     this.coverColor = coverColor;
     this.textColor = textColor;
     this.backgroundColor = backgroundColor;
   }
+
   draw(board) {
     let target = this.parent.querySelector('canvas');
     if (target == null) {
@@ -394,7 +451,7 @@ class CanvasDisplay extends Display {
     context.fillRect(0, 0, width, height);
     for (let y = 0; y < board.height; y++) {
       for (let x = 0; x < board.width; x++) {
-        let count = board.get(x, y);
+        let count = board.getMineCount(x, y);
         if (count < 0) {
           context.fillStyle = this.coverColor;
           context.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
@@ -447,7 +504,7 @@ class TableDisplay extends Display {
       row.push('  <tr>');
       for (let x = 0; x < board.width; x++) {
         let cell = '    ',
-            count = board.get(x, y);
+            count = board.getMineCount(x, y);
         if (count < 0) {
           cell += '<td class="covered">';
         }
@@ -467,10 +524,10 @@ class TableDisplay extends Display {
   }
 }
 
-let output = document.querySelector('#board');
-//let display = new ASCIIDisplay(output);
-let display = new CanvasDisplay(output);
-//let display = new TableDisplay(output);
+const OUTPUT = document.querySelector('#board');
+//let display = new ASCIIDisplay(OUTPUT);
+let display = new CanvasDisplay(OUTPUT);
+//let display = new TableDisplay(OUTPUT);
 
 let board = null;
 function newBoard(event) {
@@ -478,8 +535,9 @@ function newBoard(event) {
   display.draw(board);
 }
 
-output.addEventListener('click', (event) => {
-  let box = output.getBoundingClientRect(),
+OUTPUT.addEventListener('click', (event) => {
+  // Use OUTPUT because event.target may be a child of OUTPUT
+  let box = OUTPUT.getBoundingClientRect(),
       x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.width - 1),
       y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.height - 1);
   if (x < 0) {
