@@ -12,8 +12,7 @@ body {
 }
 output {
   display: block;
-  margin-bottom: 1em;
-  margin-left: 1em;
+  margin: 1em 0;
 }
 pre {
   font-family: "Courier New", monospace;
@@ -23,18 +22,16 @@ pre {
 }
 table {
   border-collapse: collapse;
-  font-size: 16px;
-  line-height: 16px;
   margin: 0;
   padding: 0;
-  text-align: center;
 }
 td {
-  background-color: white;
   border: 1px solid black;
-  color: black;
-  height: 18px;
-  width: 18px;
+  font-size: 14px;
+  text-align: center;
+  /* height and width so resulting cell is 20px by 20px */
+  height: 17px;
+  width: 17px;
 }
 .covered {
   background-color: #999999;
@@ -403,14 +400,14 @@ class ASCIIDisplay extends Display {
       let row = [];
       for (let x = 0; x < board.width; x++) {
         let count = board.getMineCount(x, y);
-        if (count < 0) {
+        if (count === Board.UNKNOWN) {
           row.push(this.cover);
         }
         else if (count === 0) {
           row.push(' ');
         }
-        else {
-          row.push(count);
+        else if ((0 < count) && (count <= Board.MINE)) {
+          row.push(count.toFixed());
         }
       }
       rows.push(row.join(''));
@@ -428,21 +425,23 @@ class CanvasDisplay extends Display {
   }
 
   draw(board) {
-    let target = this.parent.querySelector('canvas');
+    let target = this.parent.querySelector('canvas'),
+        width = board.width * SCALE,
+        height = board.height * SCALE,
+        middle = Math.floor(SCALE / 2),
+        context;
     if (target == null) {
       this.parent.innerHTML = '';
       target = document.createElement('canvas');
       this.parent.appendChild(target);
     }
-    let width = board.width * SCALE,
-        height = board.height * SCALE,
-        middle = SCALE / 2;
-    if ((target.width != width) || (target.height != height)) {
+    if ((target.width !== width) || (target.height !== height)) {
       target.width = width;
       target.height = height;
     }
 
-    let context = target.getContext('2d');
+    context = target.getContext('2d');
+    context.font = '14px monospace';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.strokeStyle = this.textColor;
@@ -452,18 +451,19 @@ class CanvasDisplay extends Display {
     for (let y = 0; y < board.height; y++) {
       for (let x = 0; x < board.width; x++) {
         let count = board.getMineCount(x, y);
-        if (count < 0) {
+        if (count === Board.UNKNOWN) {
           context.fillStyle = this.coverColor;
           context.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
         }
-        else if (count > 0) {
+        else if ((0 < count) && (count <= Board.MINE)) {
           context.fillStyle = this.textColor;
-          context.fillText(count, (x * SCALE) + middle, (y * SCALE) + middle);
+          context.fillText(count.toFixed(), (x * SCALE) + middle, (y * SCALE) + middle);
         }
       }
     }
 
     // Draw grid lines
+    // Outer border
     context.beginPath();
     context.moveTo(1, 1);
     context.lineTo(width - 1, 1);
@@ -471,12 +471,14 @@ class CanvasDisplay extends Display {
     context.lineTo(1, height - 1);
     context.closePath();
     context.stroke();
+    // Vertical lines
     for (let x = 1; x < board.width; x++) {
       context.beginPath();
       context.moveTo(x * SCALE, 0);
       context.lineTo(x * SCALE, height);
       context.stroke();
     }
+    // Horizontal lines
     for (let y = 1; y < board.height; y++) {
       context.beginPath();
       context.moveTo(0, y * SCALE);
@@ -487,9 +489,6 @@ class CanvasDisplay extends Display {
 }
 
 class TableDisplay extends Display {
-  constructor(parent) {
-    super(parent);
-  }
   draw(board) {
     let target = this.parent.querySelector('table');
     if (target == null) {
@@ -498,36 +497,32 @@ class TableDisplay extends Display {
       this.parent.appendChild(target);
     }
 
-    let rows = [];
+    target.innerHTML = '';
     for (let y = 0; y < board.height; y++) {
-      let row = [];
-      row.push('  <tr>');
+      let row = document.createElement('tr');
       for (let x = 0; x < board.width; x++) {
-        let cell = '    ',
+        let cell = document.createElement('td'),
             count = board.getMineCount(x, y);
-        if (count < 0) {
-          cell += '<td class="covered">';
+        if (count === Board.UNKNOWN) {
+          cell.classList.add('covered');
+        }
+        if ((0 < count) && (count <= Board.MINE)) {
+          cell.appendChild(document.createTextNode(count.toFixed()));
         }
         else {
-          cell += '<td>';
+          cell.appendChild(document.createTextNode('    '));
         }
-        if (count > 0) {
-          cell += count;
-        }
-        cell += '</td>';
-        row.push(cell);
+        row.appendChild(cell);
       }
-      row.push('  </tr>');
-      rows.push(row.join('\n'));
+      target.appendChild(row);
     }
-    target.innerHTML = rows.join('\n');
   }
 }
 
 const OUTPUT = document.querySelector('#board');
 //let display = new ASCIIDisplay(OUTPUT);
-let display = new CanvasDisplay(OUTPUT);
-//let display = new TableDisplay(OUTPUT);
+//let display = new CanvasDisplay(OUTPUT);
+let display = new TableDisplay(OUTPUT);
 
 let board = null;
 function newBoard(event) {
@@ -539,14 +534,15 @@ OUTPUT.addEventListener('click', (event) => {
   // Use OUTPUT because event.target may be a child of OUTPUT
   let box = OUTPUT.getBoundingClientRect(),
       x = Math.min(Math.floor((event.clientX - box.left) / SCALE), board.width - 1),
-      y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.height - 1);
+      y = Math.min(Math.floor((event.clientY - box.top) / SCALE), board.height - 1),
+      previous = board;
   if (x < 0) {
     x = 0;
   }
   if (y < 0) {
     y = 0;
   }
-  previous = board;
+
   board = previous.reveal(x, y);
   display.draw(board);
   if ((!previous.won) && board.won) {
