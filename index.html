@@ -20,6 +20,17 @@ pre {
   line-height: 20px;
   text-transform: full-width;
 }
+article {
+  display: grid;
+  grid-auto-rows: 20px;
+  margin: 0;
+  padding: 0;
+}
+section {
+  border: 1px solid black;
+  font-size: 14px;
+  text-align: center;
+}
 table {
   border-collapse: collapse;
   margin: 0;
@@ -197,7 +208,7 @@ class Board {
       return board;
     }
     if (board.cells[index] === 0) {
-      // recursively reveal the board
+      // Recursively reveal the board
       for (let done = 0; done < work.length; done++) {
         currentX = work[done].x;
         currentY = work[done].y;
@@ -488,6 +499,36 @@ class CanvasDisplay extends Display {
   }
 }
 
+class GridDisplay extends Display {
+  draw(board) {
+    let target = this.parent.querySelector('article');
+    if (target == null) {
+      this.parent.innerHTML = '';
+      target = document.createElement('article');
+      this.parent.appendChild(target);
+    }
+
+    target.style.gridTemplateColumns = `${ SCALE }px `.repeat(board.width).trim();
+    target.innerHTML = '';
+    for (let y = 0; y < board.height; y++) {
+      for (let x = 0; x < board.width; x++) {
+        let cell = document.createElement('section'),
+            count = board.getMineCount(x, y);
+        if (count === Board.UNKNOWN) {
+          cell.classList.add('covered');
+        }
+        if ((0 < count) && (count <= Board.MINE)) {
+          cell.appendChild(document.createTextNode(count.toFixed()));
+        }
+        else {
+          cell.appendChild(document.createTextNode('    '));
+        }
+        target.appendChild(cell);
+      }
+    }
+  }
+}
+
 class TableDisplay extends Display {
   draw(board) {
     let target = this.parent.querySelector('table');
@@ -522,7 +563,8 @@ class TableDisplay extends Display {
 const OUTPUT = document.querySelector('#board');
 //let display = new ASCIIDisplay(OUTPUT);
 //let display = new CanvasDisplay(OUTPUT);
-let display = new TableDisplay(OUTPUT);
+let display = new GridDisplay(OUTPUT);
+//let display = new TableDisplay(OUTPUT);
 
 let board = null;
 function newBoard(event) {
