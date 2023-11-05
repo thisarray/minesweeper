@@ -56,7 +56,12 @@ td {
 <h1>Minesweeper</h1>
 
 <output id="board"></output>
+
+<p>
 <button id="new">New board</button>
+<button id="one">One Mine</button>
+<button id="all">All Mines</button>
+</p>
 
 <p>Find all the mines without clicking on them.</p>
 </main>
@@ -567,8 +572,8 @@ let display = new GridDisplay(OUTPUT);
 //let display = new TableDisplay(OUTPUT);
 
 let board = null;
-function newBoard(event) {
-  board = Board.random(10, 10, 10);
+function newBoard(mineCount) {
+  board = Board.random(10, 10, mineCount);
   display.draw(board);
 }
 
@@ -594,7 +599,15 @@ OUTPUT.addEventListener('click', (event) => {
     alert('You lost!');
   }
 });
-document.querySelector('#new').addEventListener('click', newBoard);
+document.querySelector('#new').addEventListener('click', (event) => {
+  newBoard(10);
+});
+document.querySelector('#one').addEventListener('click', (event) => {
+  newBoard(1);
+});
+document.querySelector('#all').addEventListener('click', (event) => {
+  newBoard(10);
+});
 
 newBoard();
 </script>
