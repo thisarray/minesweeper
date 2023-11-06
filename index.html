@@ -59,7 +59,9 @@ td {
 
 <p>
 <button id="new">New board</button>
+<button id="none">No Mines</button>
 <button id="one">One Mine</button>
+<button id="half">Half Mines</button>
 <button id="all">All Mines</button>
 </p>
 
@@ -243,6 +245,15 @@ class Board {
   }
 
   /*
+   * Return a new width x height Board instance that is all mines.
+   */
+  static all_mines(width, height) {
+    let board = new Board(width, height);
+    board.cells.fill(Board.MINE + 10);
+    return board;
+  }
+
+  /*
    * Return a new width x height Board instance with limit mines.
    */
   static random(width, height, limit) {
@@ -366,7 +377,7 @@ class Board {
     console.assert(board.reveal(4, 4) === board,
                    {msg: 'board.reveal() failed.'});
 
-    board = Board.random(10, 10);
+    board = Board.random(10, 10, 10);
     console.assert(board.cells.every(v => (v >= 10)),
                    {msg: 'board.cells is incorrect.'});
     console.assert(!board.won,
@@ -379,6 +390,28 @@ class Board {
                        {msg: 'board.getMineCount() failed.'});
       }
     }
+
+    board = Board.all_mines(10, 10);
+    console.assert(board.cells.every(v => (v === (Board.MINE + 10))),
+                   {msg: 'board.cells is incorrect.'});
+    console.assert(!board.won,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(!board.lost,
+                   {msg: 'board.lost is incorrect.'});
+    for (let x = -1; x <= board.width; x++) {
+      for (let y = -1; y <= board.height; y++) {
+        console.assert(board.getMineCount(x, y) === Board.UNKNOWN,
+                       {msg: 'board.getMineCount() failed.'});
+      }
+    }
+
+    lostBoard = board.reveal(9, 9);
+    console.assert(!lostBoard.won,
+                   {msg: 'board.won is incorrect.'});
+    console.assert(lostBoard.lost,
+                   {msg: 'board.lost is incorrect.'});
+    console.assert(lostBoard.reveal(4, 4) === lostBoard,
+                   {msg: 'board.reveal() failed.'});
   }
 }
 Board.test();
@@ -602,14 +635,21 @@ OUTPUT.addEventListener('click', (event) => {
 document.querySelector('#new').addEventListener('click', (event) => {
   newBoard(10);
 });
+document.querySelector('#none').addEventListener('click', (event) => {
+  newBoard(0);
+});
 document.querySelector('#one').addEventListener('click', (event) => {
   newBoard(1);
 });
+document.querySelector('#half').addEventListener('click', (event) => {
+  newBoard(50);
+});
 document.querySelector('#all').addEventListener('click', (event) => {
-  newBoard(10);
+  board = Board.all_mines(10, 10);
+  display.draw(board);
 });
 
-newBoard();
+newBoard(10);
 </script>
 </body>
 
